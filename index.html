@@ -1,0 +1,839 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Obi J | Synergistic DeFi Primitives</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;700&display=swap" rel="stylesheet">
+    
+    <!-- Load Three.js for true 3D rendering -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+
+    <style>
+        :root {
+            --bg-top: #050508;
+            --bg-mid: #160a26;
+            --bg-bot: #d13e9444; /* Soft horizon bloom */
+            --accent-green: #B4F730;
+            --accent-cyan: #00FFFF;
+            --text-main: #FFFFFF;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body, html {
+            width: 100%;
+            height: 100%;
+            font-family: 'Space Grotesk', sans-serif;
+            background: radial-gradient(circle at 50% 60%, var(--bg-mid) 0%, var(--bg-top) 100%);
+            overflow: hidden;
+            color: var(--text-main);
+        }
+
+        /* 2D Background Silhouette Mountains (Clean atmospheric layout) */
+        .bg-mountains {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            height: 40%;
+            background: linear-gradient(to top, #050508 40%, transparent 100%);
+            opacity: 0.9;
+            z-index: 1;
+            pointer-events: none;
+        }
+
+        /* Ambient Brand Watermark behind Orb for dramatic depth scale */
+        .ambient-brand {
+            position: absolute;
+            top: 40%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: clamp(5rem, 14vw, 15rem);
+            font-weight: 700;
+            letter-spacing: 0.5em;
+            color: rgba(255, 255, 255, 0.02);
+            text-shadow: 0 0 80px rgba(209, 62, 148, 0.15);
+            pointer-events: none;
+            z-index: 1;
+            text-transform: uppercase;
+            will-change: transform;
+        }
+
+        /* WebGL Canvas */
+        #webgl-canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            z-index: 2;
+            pointer-events: none;
+        }
+
+        /* ----- MINIMALIST PORTAL HUD OVERLAY ----- */
+        #holograms-container {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 5;
+            pointer-events: none;
+        }
+
+        /* Sleek Micro-Labels instead of childish cards */
+        .node-marker {
+            position: absolute;
+            pointer-events: auto;
+            transform: translate(-50%, -100%);
+            will-change: transform;
+            cursor: pointer;
+            transition: opacity 0.4s ease;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .node-text {
+            font-family: monospace;
+            font-size: 10px;
+            letter-spacing: 3px;
+            text-transform: uppercase;
+            color: rgba(255, 255, 255, 0.35);
+            transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+            user-select: none;
+            text-align: center;
+        }
+
+        .node-line {
+            width: 1px;
+            height: 25px;
+            background: linear-gradient(to top, var(--accent-cyan), transparent);
+            opacity: 0.2;
+            transition: all 0.3s ease;
+        }
+
+        .node-dot {
+            width: 3px;
+            height: 3px;
+            border-radius: 50%;
+            background: var(--accent-cyan);
+            box-shadow: 0 0 8px var(--accent-cyan);
+            transition: all 0.3s ease;
+        }
+
+        /* Sophisticated micro hover animation */
+        .node-marker:hover .node-text {
+            color: var(--hover-color, #FFF);
+            text-shadow: 0 0 10px var(--hover-color, #FFF);
+            transform: translateY(-4px);
+        }
+
+        .node-marker:hover .node-line {
+            height: 40px;
+            opacity: 0.6;
+            background: linear-gradient(to top, var(--hover-color), transparent);
+        }
+
+        .node-marker:hover .node-dot {
+            background: var(--hover-color);
+            box-shadow: 0 0 12px var(--hover-color);
+            transform: scale(1.5);
+        }
+
+        /* ----- UI DESIGN & FOREGROUND ----- */
+        .ui-layer {
+            position: relative;
+            z-index: 10;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            padding: 40px;
+            pointer-events: none; /* Let clicks pass through empty space */
+        }
+        
+        header, .cta, .pagination, .sound-toggle, .menu-btn {
+            pointer-events: auto; /* Re-enable clicks on interactive elements */
+        }
+
+        header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            width: 100%;
+        }
+
+        .logo .reactive-text {
+            font-family: 'Space Grotesk', monospace;
+            font-size: 18px;
+            font-weight: 700;
+            letter-spacing: 6px;
+            color: var(--text-main);
+            transition: all 0.3s ease;
+            cursor: pointer;
+            user-select: none;
+            text-shadow: 0 0 5px rgba(255,255,255,0.3);
+            display: inline-block;
+        }
+        
+        .logo .reactive-text:hover {
+            color: var(--accent-cyan);
+            text-shadow: 0 0 15px var(--accent-cyan);
+            transform: scale(1.05);
+        }
+
+        .pagination { display: flex; gap: 12px; }
+        .dot {
+            width: 3px; height: 3px; border-radius: 50%;
+            background: rgba(255,255,255,0.2);
+            transition: 0.3s;
+        }
+        .dot.active { background: var(--accent-green); box-shadow: 0 0 8px var(--accent-green); }
+
+        .nav-right {
+            display: flex; align-items: center; gap: 30px;
+            font-size: 11px; letter-spacing: 2.5px; text-transform: uppercase;
+        }
+
+        .sound-toggle { cursor: pointer; opacity: 0.5; transition: 0.3s; color: var(--accent-cyan); }
+        .sound-toggle:hover { opacity: 1; text-shadow: 0 0 8px var(--accent-cyan); }
+        .sound-toggle.active { color: var(--accent-green); text-shadow: 0 0 8px var(--accent-green); opacity: 1; }
+
+        .menu-btn {
+            display: flex; flex-direction: column; gap: 6px; cursor: pointer;
+            padding: 5px;
+        }
+        .menu-btn span {
+            display: block; width: 24px; height: 1px; background: var(--text-main);
+            transition: 0.3s;
+            opacity: 0.7;
+        }
+        .menu-btn:hover span:nth-child(2) { width: 16px; }
+
+        .hero {
+            flex-grow: 1;
+            display: flex;
+            flex-direction: column;
+            justify-content: flex-end;
+            max-width: 480px;
+            padding-bottom: 40px;
+            pointer-events: none;
+        }
+
+        .cta {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            text-decoration: none;
+            color: var(--text-main);
+            font-size: 13px;
+            letter-spacing: 1.5px;
+            opacity: 0.6;
+            transition: 0.3s;
+            text-transform: uppercase;
+            align-self: flex-start;
+        }
+
+        .cta:hover { opacity: 1; text-shadow: 0 0 10px rgba(255,255,255,0.4); }
+        
+        .cta-icon {
+            width: 32px; height: 32px;
+            border: 1px solid rgba(255,255,255,0.2);
+            border-radius: 50%;
+            display: flex; justify-content: center; align-items: center;
+            position: relative;
+        }
+        .cta-icon::before {
+            content: '';
+            position: absolute;
+            width: 40%; height: 40%;
+            border: 1px solid rgba(255,255,255,0.4);
+            border-radius: 50%;
+        }
+
+        /* Menu Overlay */
+        .menu-overlay {
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(5, 5, 8, 0.95);
+            backdrop-filter: blur(25px);
+            z-index: 100;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+        .menu-overlay.active {
+            opacity: 1;
+            pointer-events: auto;
+        }
+
+        .close-btn {
+            position: absolute; top: 40px; right: 40px;
+            font-size: 11px; letter-spacing: 3px;
+            cursor: pointer; opacity: 0.5; transition: 0.3s;
+            padding: 10px;
+        }
+        .close-btn:hover { opacity: 1; color: var(--accent-green); }
+
+        .links-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 15px;
+            text-align: center;
+            max-width: 600px;
+            width: 100%;
+            padding: 20px;
+        }
+
+        .links-grid a {
+            color: rgba(255, 255, 255, 0.6);
+            text-decoration: none;
+            font-size: 14px;
+            letter-spacing: 3px;
+            padding: 14px;
+            border: 1px solid rgba(255,255,255,0.05);
+            border-radius: 4px;
+            background: rgba(255,255,255,0.01);
+            transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+            text-transform: uppercase;
+        }
+
+        .links-grid a:hover {
+            color: #FFF;
+            border-color: rgba(255,255,255,0.2);
+            background: rgba(255,255,255,0.04);
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+            transform: translateY(-2px);
+        }
+
+        .artist-title {
+            position: absolute;
+            top: 15%;
+            font-size: 18px;
+            letter-spacing: 8px;
+            color: var(--accent-green);
+            text-transform: uppercase;
+        }
+
+        @media (max-width: 900px) {
+            .hero { justify-content: flex-end; padding-bottom: 20px; max-width: 100%; }
+            #holograms-container { display: none; }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Ambient Brand Watermark Layer -->
+    <div class="ambient-brand" id="brand-bg">OBIJ</div>
+
+    <!-- 2D Base Background Layer -->
+    <div class="bg-mountains"></div>
+
+    <!-- 3D WebGL Scene -->
+    <canvas id="webgl-canvas"></canvas>
+
+    <!-- Clean Projection Labels Layer -->
+    <div id="holograms-container"></div>
+
+    <!-- UI Overlay Layer -->
+    <div class="ui-layer">
+        <header>
+            <div class="logo">
+                <span class="reactive-text">AICANFEEL</span>
+            </div>
+            
+            <div class="pagination">
+                <div class="dot active"></div>
+                <div class="dot"></div>
+                <div class="dot"></div>
+                <div class="dot"></div>
+                <div class="dot"></div>
+            </div>
+
+            <div class="nav-right">
+                <div class="sound-toggle" id="soundBtn" onclick="toggleSynth()">Sound: OFF</div>
+                <div class="menu-btn" onclick="toggleMenu()">
+                    <span></span>
+                    <span></span>
+                </div>
+            </div>
+        </header>
+
+        <main class="hero">
+            <a href="#" class="cta" onclick="toggleMenu(); return false;">
+                <div class="cta-icon"></div>
+                Open Network Hub
+            </a>
+        </main>
+    </div>
+
+    <!-- Artist Links Menu Overlay -->
+    <div class="menu-overlay" id="menuOverlay">
+        <div class="close-btn" onclick="toggleMenu()">CLOSE X</div>
+        <div class="artist-title">OBI J OFFICIAL</div>
+        <div class="links-grid">
+            <a href="https://youtube.com/@obij12?si=zS9Ny5vnPJVB4dJP" target="_blank">YouTube</a>
+            <a href="https://x.com/obij12" target="_blank">X (Twitter)</a>
+            <a href="https://www.snapchat.com/add/obij1224?share_id=7Z-PF9EjcN8&locale=en-US" target="_blank">Snapchat</a>
+            <a href="https://www.tiktok.com/@obij12?_r=1&_t=ZT-94bP2x5ODF7" target="_blank">TikTok</a>
+            <a href="https://open.spotify.com/artist/5xLJbP5xze3HnZcu29II0D?si=XS5PxMNqSjK4zHDW3-sHqQ" target="_blank">Spotify</a>
+            <a href="https://music.apple.com/tz/artist/obi-j/1157187981" target="_blank">Apple Music</a>
+            <a href="https://www.instagram.com/obij12?igsh=MTZjcDd0aXdlamE0ZA==" target="_blank">Instagram</a>
+            <a href="https://www.facebook.com/share/1HAf6R9kSP/" target="_blank">Facebook</a>
+            <a href="https://pandora.app.link/tC0VdqPNB0b" target="_blank">Pandora</a>
+            <a href="https://wa.me/14053711586" target="_blank">WhatsApp</a>
+        </div>
+    </div>
+
+    <script>
+        // --- SYNTHESIZER AUDIO ENGINE (Web Audio API) ---
+        let audioCtx = null;
+        let ambientOsc = null;
+        let ambientOsc2 = null;
+        let masterGain = null;
+        let synthActive = false;
+
+        function initSynth() {
+            if (audioCtx) return;
+            audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            
+            masterGain = audioCtx.createGain();
+            masterGain.gain.setValueAtTime(0.0, audioCtx.currentTime);
+            
+            // Subdued, highly elegant drone sound
+            ambientOsc = audioCtx.createOscillator();
+            ambientOsc.type = 'sine';
+            ambientOsc.frequency.setValueAtTime(55, audioCtx.currentTime); // A1 Deep
+            
+            ambientOsc2 = audioCtx.createOscillator();
+            ambientOsc2.type = 'triangle';
+            ambientOsc2.frequency.setValueAtTime(110, audioCtx.currentTime);
+
+            const lpFilter = audioCtx.createBiquadFilter();
+            lpFilter.type = 'lowpass';
+            lpFilter.frequency.setValueAtTime(180, audioCtx.currentTime);
+
+            ambientOsc.connect(lpFilter);
+            ambientOsc2.connect(lpFilter);
+            lpFilter.connect(masterGain);
+            masterGain.connect(audioCtx.destination);
+            
+            ambientOsc.start();
+            ambientOsc2.start();
+        }
+
+        function toggleSynth() {
+            const btn = document.getElementById('soundBtn');
+            if (!audioCtx) initSynth();
+
+            if (!synthActive) {
+                audioCtx.resume();
+                masterGain.gain.linearRampToValueAtTime(0.12, audioCtx.currentTime + 1.5);
+                btn.textContent = "Sound: ACTIVE";
+                btn.classList.add('active');
+                synthActive = true;
+            } else {
+                masterGain.gain.linearRampToValueAtTime(0.0, audioCtx.currentTime + 0.8);
+                btn.textContent = "Sound: OFF";
+                btn.classList.remove('active');
+                synthActive = false;
+            }
+        }
+
+        function triggerHoloSound(freq) {
+            if (!synthActive || !audioCtx) return;
+            
+            const osc = audioCtx.createOscillator();
+            const chimeGain = audioCtx.createGain();
+            const filter = audioCtx.createBiquadFilter();
+
+            osc.type = 'sine';
+            osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+            
+            filter.type = 'bandpass';
+            filter.frequency.setValueAtTime(freq * 1.2, audioCtx.currentTime);
+
+            chimeGain.gain.setValueAtTime(0.08, audioCtx.currentTime);
+            chimeGain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 2.5);
+
+            osc.connect(filter);
+            filter.connect(chimeGain);
+            chimeGain.connect(audioCtx.destination);
+
+            osc.start();
+            osc.stop(audioCtx.currentTime + 2.6);
+        }
+
+        // --- Menu Toggle ---
+        function toggleMenu() {
+            const menu = document.getElementById('menuOverlay');
+            menu.classList.toggle('active');
+        }
+
+        // --- PLATFORM SITES - REDESIGNED TO BE BALANCED & CLEAN ---
+        const artistLinks = [
+            { name: "Spotify", url: "https://open.spotify.com/artist/5xLJbP5xze3HnZcu29II0D?si=XS5PxMNqSjK4zHDW3-sHqQ", pos: new THREE.Vector3(-4.5, -0.6, 2.5), color: "#1ED760", soundFreq: 329.63 },
+            { name: "Apple Music", url: "https://music.apple.com/tz/artist/obi-j/1157187981", pos: new THREE.Vector3(-3.5, -0.6, 0.5), color: "#FC3C44", soundFreq: 392.00 },
+            { name: "YouTube", url: "https://youtube.com/@obij12?si=zS9Ny5vnPJVB4dJP", pos: new THREE.Vector3(-5.2, -0.6, -1.5), color: "#FF0000", soundFreq: 440.00 },
+            { name: "Twitter / X", url: "https://x.com/obij12", pos: new THREE.Vector3(5.2, -0.6, -1.5), color: "#FFFFFF", soundFreq: 523.25 },
+            { name: "Instagram", url: "https://www.instagram.com/obij12?igsh=MTZjcDd0aXdlamE0ZA==", pos: new THREE.Vector3(4.8, -0.6, 1.5), color: "#E1306C", soundFreq: 587.33 },
+            { name: "TikTok", url: "https://www.tiktok.com/@obij12?_r=1&_t=ZT-94bP2x5ODF7", pos: new THREE.Vector3(3.5, -0.6, 3.2), color: "#00FFFF", soundFreq: 659.25 },
+            { name: "Snapchat", url: "https://www.snapchat.com/add/obij1224?share_id=7Z-PF9EjcN8&locale=en-US", pos: new THREE.Vector3(-6.2, -0.6, 1.2), color: "#FFFC00", soundFreq: 698.46 },
+            { name: "WhatsApp", url: "https://wa.me/14053711586", pos: new THREE.Vector3(-2.2, -0.6, 4.2), color: "#25D366", soundFreq: 783.99 },
+            { name: "Facebook", url: "https://www.facebook.com/share/1HAf6R9kSP/", pos: new THREE.Vector3(2.2, -0.6, 4.5), color: "#1877F2", soundFreq: 880.00 },
+            { name: "Pandora", url: "https://pandora.app.link/tC0VdqPNB0b", pos: new THREE.Vector3(6.2, -0.6, -0.5), color: "#00A0EE", soundFreq: 987.77 }
+        ];
+
+        // --- THREE.JS SCENE SETUP ---
+        const canvas = document.getElementById('webgl-canvas');
+        const scene = new THREE.Scene();
+        
+        const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 100);
+        // Adaptive Z-index to fit structure gracefully on mobile
+        camera.position.set(0, 1.8, window.innerWidth < 900 ? 14.5 : 8.5);
+
+        const renderer = new THREE.WebGLRenderer({ 
+            canvas: canvas, 
+            alpha: true, 
+            antialias: true 
+        });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+
+        // --- LIGHTING ---
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.25);
+        scene.add(ambientLight);
+
+        // Core light from middle area
+        const pointLight = new THREE.PointLight(0xD13E94, 2, 20); 
+        pointLight.position.set(1.0, 2.3, -1.5);
+        scene.add(pointLight);
+
+        const blueLight = new THREE.DirectionalLight(0x4A90E2, 1);
+        blueLight.position.set(-5, 4, 5);
+        scene.add(blueLight);
+
+        // --- THE CENTER ORB ASSEMBLY (HIGH END GLASS) ---
+        const orbGroup = new THREE.Group();
+        orbGroup.position.set(1.0, 2.3, -1.5); 
+        scene.add(orbGroup);
+
+        // Outer premium glass shell
+        const glassGeometry = new THREE.SphereGeometry(1.4, 64, 64);
+        const glassMaterial = new THREE.MeshPhysicalMaterial({
+            color: 0x2A104A,
+            metalness: 0.1,
+            roughness: 0.1,
+            transmission: 0.9,
+            ior: 1.5,
+            thickness: 0.5,
+            transparent: true,
+            opacity: 0.85,
+            side: THREE.DoubleSide
+        });
+        const glassSphere = new THREE.Mesh(glassGeometry, glassMaterial);
+        orbGroup.add(glassSphere);
+
+        // Glowing internal golden core
+        const coreGeometry = new THREE.IcosahedronGeometry(0.7, 2);
+        const coreMaterial = new THREE.MeshStandardMaterial({
+            color: 0x050508,
+            emissive: 0xD13E94,
+            emissiveIntensity: 1.5,
+            wireframe: true,
+            transparent: true,
+            opacity: 0.8
+        });
+        const coreSphere = new THREE.Mesh(coreGeometry, coreMaterial);
+        orbGroup.add(coreSphere);
+
+        // --- SINGLE CYBER COORDINATE RING (Sleek Celestial Gyro) ---
+        const ringGeom = new THREE.RingGeometry(1.6, 1.62, 128);
+        const ringMat = new THREE.MeshBasicMaterial({
+            color: 0x00FFFF,
+            side: THREE.DoubleSide,
+            transparent: true,
+            opacity: 0.25
+        });
+        const coordinateRing = new THREE.Mesh(ringGeom, ringMat);
+        coordinateRing.rotation.x = Math.PI / 2.2; // Sleek horizontal alignment
+        orbGroup.add(coordinateRing);
+
+        // --- SLEEK ORBITING PARTICLE BELT ---
+        const beltParticlesCount = 600;
+        const beltGeom = new THREE.BufferGeometry();
+        const beltPosArray = new Float32Array(beltParticlesCount * 3);
+        const beltColorsArray = new Float32Array(beltParticlesCount * 3);
+
+        const colorCyan = new THREE.Color(0x00FFFF);
+        const colorMagenta = new THREE.Color(0xD13E94);
+
+        for (let i = 0; i < beltParticlesCount; i++) {
+            // Distribute points in a ring structure
+            const theta = Math.random() * Math.PI * 2;
+            const radius = 1.7 + Math.random() * 0.4;
+            const yOffset = (Math.random() - 0.5) * 0.15; // Keep it sleek and thin
+
+            beltPosArray[i * 3] = Math.cos(theta) * radius;
+            beltPosArray[i * 3 + 1] = yOffset;
+            beltPosArray[i * 3 + 2] = Math.sin(theta) * radius;
+
+            // Randomly mix Cyan and Magenta for the particles
+            const mix = colorCyan.clone().lerp(colorMagenta, Math.random());
+            beltColorsArray[i * 3] = mix.r;
+            beltColorsArray[i * 3 + 1] = mix.g;
+            beltColorsArray[i * 3 + 2] = mix.b;
+        }
+
+        beltGeom.setAttribute('position', new THREE.BufferAttribute(beltPosArray, 3));
+        beltGeom.setAttribute('color', new THREE.BufferAttribute(beltColorsArray, 3));
+
+        const beltMat = new THREE.PointsMaterial({
+            size: 0.025,
+            vertexColors: true,
+            transparent: true,
+            opacity: 0.8,
+            blending: THREE.AdditiveBlending,
+            depthWrite: false
+        });
+
+        const particleBelt = new THREE.Points(beltGeom, beltMat);
+        particleBelt.rotation.x = Math.PI / 2.2; // Match the tilt of the main ring
+        orbGroup.add(particleBelt);
+
+        // --- PROCEDURAL GROUND TERRAIN ---
+        const terrainGeometry = new THREE.PlaneGeometry(35, 25, 32, 32);
+        const posAttribute = terrainGeometry.attributes.position;
+        for (let i = 0; i < posAttribute.count; i++) {
+            const z = Math.random() * 0.3; // Flat subtle geometric structure
+            posAttribute.setZ(i, z);
+        }
+        terrainGeometry.computeVertexNormals();
+
+        const terrainMaterial = new THREE.MeshStandardMaterial({
+            color: 0x050508,
+            roughness: 0.9,
+            metalness: 0.2,
+            flatShading: true
+        });
+        const terrain = new THREE.Mesh(terrainGeometry, terrainMaterial);
+        terrain.rotation.x = -Math.PI / 2;
+        terrain.position.y = -1.0;
+        terrain.position.z = 2.0;
+        scene.add(terrain);
+
+        // --- SLEEK EMISSIVE CRYSTAL NODES ---
+        const crystalMaterial = new THREE.MeshStandardMaterial({
+            color: 0x4A90E2,
+            emissive: 0x4A90E2,
+            emissiveIntensity: 0.5,
+            roughness: 0.1,
+            metalness: 0.9,
+            transparent: true,
+            opacity: 0.8
+        });
+
+        const hologramsContainer = document.getElementById('holograms-container');
+
+        artistLinks.forEach((link, idx) => {
+            // Tiny geometric crystal cluster anchor point
+            const cluster = new THREE.Group();
+            
+            const mainGeom = new THREE.ConeGeometry(0.12, 0.9, 4);
+            const mainCrystal = new THREE.Mesh(mainGeom, crystalMaterial);
+            mainCrystal.position.y = 0.45;
+            cluster.add(mainCrystal);
+
+            cluster.position.copy(link.pos);
+            scene.add(cluster);
+
+            const tipPos = link.pos.clone();
+            tipPos.y += 0.9;
+
+            // Sleek vector line pointing straight up to floating text
+            const labelTargetPos = tipPos.clone();
+            labelTargetPos.y += 1.0;
+
+            const lineGeometry = new THREE.BufferGeometry().setFromPoints([tipPos, labelTargetPos]);
+            const lineMaterial = new THREE.LineBasicMaterial({
+                color: 0x00FFFF,
+                transparent: true,
+                opacity: 0.1
+            });
+            const connectorLine = new THREE.Line(lineGeometry, lineMaterial);
+            scene.add(connectorLine);
+
+            // Create beautiful typography labels
+            const element = document.createElement('div');
+            element.className = 'node-marker';
+            element.style.setProperty('--hover-color', link.color);
+            element.innerHTML = `
+                <span class="node-text">${link.name}</span>
+                <div class="node-line"></div>
+                <div class="node-dot"></div>
+            `;
+
+            // Hover interactions: cleanly alter internal light glow
+            element.addEventListener('mouseenter', () => {
+                const targetCol = new THREE.Color(link.color);
+                coreMaterial.emissive.copy(targetCol);
+                pointLight.color.copy(targetCol);
+                ringMat.color.copy(targetCol);
+                triggerHoloSound(link.soundFreq);
+            });
+
+            element.addEventListener('mouseleave', () => {
+                coreMaterial.emissive.setHex(0xD13E94);
+                pointLight.color.setHex(0xD13E94);
+                ringMat.color.setHex(0x00FFFF);
+            });
+
+            element.addEventListener('click', () => {
+                triggerHoloSound(link.soundFreq * 1.5);
+                setTimeout(() => {
+                    window.open(link.url, '_blank');
+                }, 150);
+            });
+
+            hologramsContainer.appendChild(element);
+
+            link.element = element;
+            link.labelPos3D = labelTargetPos;
+        });
+
+        // --- SUBTLE FLOATING ATMOSPHERIC PARTICLES ---
+        const particlesGeometry = new THREE.BufferGeometry();
+        const particlesCount = 120;
+        const posArray = new Float32Array(particlesCount * 3);
+
+        for(let i = 0; i < particlesCount * 3; i++) {
+            posArray[i] = (Math.random() - 0.5) * 12;
+        }
+        particlesGeometry.setAttribute('position', new THREE.BufferAttribute(posArray, 3));
+        const particlesMaterial = new THREE.PointsMaterial({
+            size: 0.02,
+            color: 0x4A90E2,
+            transparent: true,
+            opacity: 0.4,
+            blending: THREE.AdditiveBlending
+        });
+        const particlesMesh = new THREE.Points(particlesGeometry, particlesMaterial);
+        scene.add(particlesMesh);
+
+        // --- ANIMATION, PARALLAX, & PROJECTION LOOP ---
+        let mouseX = 0;
+        let mouseY = 0;
+        let targetX = 0;
+        let targetY = 0;
+        let useGyro = false;
+
+        // Mobile gyroscope parallax
+        if (window.DeviceOrientationEvent) {
+            window.addEventListener('deviceorientation', (event) => {
+                if (event.gamma !== null && event.beta !== null) {
+                    useGyro = true;
+                    let tx = event.gamma / 35;
+                    let ty = (event.beta - 60) / 35; // Assume natural phone tilt at 60deg
+                    targetX = Math.max(-1, Math.min(1, tx));
+                    targetY = Math.max(-1, Math.min(1, ty));
+                }
+            });
+        }
+
+        document.addEventListener('mousemove', (event) => {
+            if (!useGyro) {
+                targetX = (event.clientX / window.innerWidth) * 2 - 1;
+                targetY = -(event.clientY / window.innerHeight) * 2 + 1;
+            }
+        });
+
+        // Touch parallax fallback
+        document.addEventListener('touchmove', (event) => {
+            if (!useGyro && event.touches.length > 0) {
+                targetX = (event.touches[0].clientX / window.innerWidth) * 2 - 1;
+                targetY = -(event.touches[0].clientY / window.innerHeight) * 2 + 1;
+            }
+        });
+
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            // Push camera back for portrait aspect ratio to keep all nodes visible
+            camera.position.z = window.innerWidth < 900 ? 14.5 : 8.5;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        const clock = new THREE.Clock();
+        const tempV = new THREE.Vector3();
+        const brandBG = document.getElementById('brand-bg');
+
+        function animate() {
+            requestAnimationFrame(animate);
+            const elapsedTime = clock.getElapsedTime();
+
+            // Parallax camera easing
+            mouseX += (targetX - mouseX) * 0.04;
+            mouseY += (targetY - mouseY) * 0.04;
+
+            camera.position.x = mouseX * 2.0;
+            camera.position.y = 1.8 + mouseY * 1.0;
+            camera.lookAt(0.5, 1.5, 0);
+
+            // Parallax on the background OBIJ watermarked text
+            brandBG.style.transform = `translate(-50%, -50%) translate3d(${-mouseX * 25}px, ${-mouseY * 12}px, 0)`;
+
+            // Elegant Orb animations
+            orbGroup.position.y = 2.3 + Math.sin(elapsedTime * 0.3) * 0.12;
+            glassSphere.rotation.y = elapsedTime * 0.05;
+            coreSphere.rotation.x = elapsedTime * 0.1;
+            coreSphere.rotation.z = elapsedTime * 0.12;
+            coordinateRing.rotation.z = -elapsedTime * 0.08;
+            particleBelt.rotation.z = elapsedTime * 0.06; // Sleek particle orbit
+
+            // Slow volumetric pulsing
+            coreMaterial.emissiveIntensity = 1.2 + Math.sin(elapsedTime * 2) * 0.3;
+
+            // Atmospheric drift
+            particlesMesh.rotation.y = elapsedTime * -0.015;
+
+            // Projection of clean markers from 3D into HTML Space
+            artistLinks.forEach(link => {
+                if (link.element) {
+                    tempV.copy(link.labelPos3D);
+                    tempV.project(camera);
+
+                    if (tempV.z > 1) {
+                        link.element.style.opacity = '0';
+                        link.element.style.pointerEvents = 'none';
+                    } else {
+                        const x = (tempV.x * 0.5 + 0.5) * window.innerWidth;
+                        const y = (tempV.y * -0.5 + 0.5) * window.innerHeight;
+
+                        link.element.style.opacity = '1';
+                        link.element.style.pointerEvents = 'auto';
+                        link.element.style.transform = `translate(-50%, -100%) translate(${x}px, ${y}px)`;
+                    }
+                }
+            });
+
+            renderer.render(scene, camera);
+        }
+
+        // Start WebGL Scene
+        window.onload = function() {
+            animate();
+        };
+    </script>
+</body>
+</html>
